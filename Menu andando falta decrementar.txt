@@ -1,0 +1,216 @@
+#include <Arduino.h>
+#include <esp_task_wdt.h>
+#include <math.h>
+#include <LiquidCrystal_I2C.h>
+
+#define CONFIG_THERMISTOR_ADC_PIN 26
+#define CONFIG_THERMISTOR_RESISTOR 9800.0f
+#define CALIENTE_PIN 32
+
+int pantalla = 0;
+int q = 10;
+int tiempoRestante = q * 60 * 60; // horas en segundos
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+const int arriba = 16;
+const int abajo = 17;
+const int enter = 18;
+const int escape = 19;
+
+float thermistor_get_resistance(uint16_t adcval) {
+  return (CONFIG_THERMISTOR_RESISTOR * ((4095.0f / adcval) - 1.0f));
+}
+
+float thermistor_get_temperature(float resistance) {
+  float temp;
+  temp = log(resistance);
+  temp = 1 / (0.0008880739089481312 + (0.00025142517116266477 * temp) + (0.00000019227944881117048 * temp * temp * temp));
+  return temp - 268.15;
+}
+
+double setpoint = 38.0;
+double kp = 1.0;
+double ki = 0;
+double kd = 0;
+double error, lastError = 0;
+double integral = 0;
+double derivative;
+double output;
+
+void calculatePID(float temperatura) {
+  error = setpoint - temperatura;
+  integral += error;
+  derivative = error - lastError;
+  output = kp * error + ki * integral + kd * derivative;
+
+  if (output < 0)
+    output = 0;
+  else if (output > 255)
+    output = 255;
+
+  analogWrite(CALIENTE_PIN, (int)output);
+  lastError = error;
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(arriba, INPUT);
+  pinMode(abajo, INPUT);
+  pinMode(enter, INPUT);
+  pinMode(escape, INPUT);
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  pinMode(CALIENTE_PIN, OUTPUT);
+  analogWrite(CALIENTE_PIN, 0);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("YOGURTERA");
+}
+
+void loop() {
+  switch (pantalla) {
+
+    case 0:
+      if (digitalRead(enter) == HIGH) {
+        pantalla = 1;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Sel.Temp");
+        delay(500);
+      }
+      break;
+
+    case 1:
+      if (digitalRead(enter) == HIGH) {
+        pantalla = 2;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("TEMP: ");
+        delay(500);
+      }
+      if (digitalRead(abajo) == HIGH) {
+        pantalla = 3;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Tiempo");
+        delay(500);
+      }
+      break;
+
+    case 2:
+      if (digitalRead(escape) == HIGH) {
+        pantalla = 1;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Sel.Temp");
+        delay(500);
+      }
+      if (digitalRead(arriba) == HIGH) {
+        if (setpoint < 48) {
+          setpoint++;
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("TEMP: ");
+          lcd.setCursor(0, 1);
+          lcd.print(setpoint);
+          delay(500);
+        }
+      }
+      if (digitalRead(abajo) == HIGH) {
+        if (setpoint > 25) {
+          setpoint--;
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("TEMP: ");
+          lcd.setCursor(0, 1);
+          lcd.print(setpoint);
+          delay(500);
+        }
+      }
+      break;
+
+    case 3:
+      if (digitalRead(enter) == HIGH) {
+        pantalla = 4;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Sel.Tiempo");
+        delay(500);
+      }
+      if (digitalRead(arriba) == HIGH) {
+        pantalla = 1;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Sel.Temp");
+        delay(500);
+      }
+      if (digitalRead(abajo) == HIGH) {
+        pantalla = 5;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Comienzo");
+        delay(500);
+      }
+      break;
+
+    case 4:
+      if (digitalRead(escape) == HIGH) {
+        pantalla = 3;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Cant.de Horas: ");
+        delay(500);
+      }
+      if (digitalRead(arriba) == HIGH) {
+        if (q < 12) {
+          q++;
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("Horas Sel.: ");
+          lcd.setCursor(0, 1);
+          lcd.print(q);
+          delay(500);
+        }
+      }
+      if (digitalRead(abajo) == HIGH) {
+        if (q >= 0) {
+          q--;
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("Horas Sel.: ");
+          lcd.setCursor(0, 1);
+          lcd.print(q);
+          delay(500);
+        }
+      }
+      break;
+
+    case 5:
+      if (digitalRead(arriba) == HIGH) {
+        pantalla = 3;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Sel.Tiempo");
+        delay(500);
+      }
+      if (digitalRead(enter) == HIGH) {
+        pantalla = 6;
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Comenzando...");
+        delay(500);
+      }
+      break;
+
+    case 6:
+      if (digitalRead(enter) == HIGH) {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Comenzando...");
+        delay(500);
+      }
+      break;
+  }
+}

@@ -1,0 +1,29 @@
+#include <Arduino.h>
+#include <esp_task_wdt.h>
+int q=10;
+int tiempoRestante = q * 60 * 60; // horas en segundos
+
+void setup() {
+  Serial.begin(115200);
+}
+
+void loop() {
+  if (tiempoRestante > 0) {
+    int horas = tiempoRestante / 3600;
+    int minutos = (tiempoRestante % 3600) / 60;
+    int segundos = tiempoRestante % 60;
+    
+    Serial.println("Tiempo restante: " + String(horas) + " horas " + String(minutos) + " minutos " + String(segundos) + " segundos");
+    delay(1000); // Esperar un segundo
+    tiempoRestante--; // Reducir el tiempo restante en un segundo
+  } else {
+    Serial.println("Cuenta atrás finalizada.");
+    while (1) {
+      // Puedes agregar aquí una acción específica cuando la cuenta atrás llega a cero.
+      // Por ejemplo, activar un relé, enviar una notificación, etc.
+    }
+  }
+
+  // Refrescar el contador del watchdog para evitar reinicios inesperados
+  esp_task_wdt_reset();
+}
